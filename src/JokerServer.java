@@ -15,9 +15,6 @@ public class JokerServer {
     //more and more for different purposes
     public static final int PLAYER_INFO = 4;
     public static final int START_GAME = 5;
-    public static final int UNDO = 6;
-    public static final int UPLOAD_PUZZLE = 7;
-    public static final int GET_TOP10 = 8;
 
 
     public static Object lockObject = new Object();
@@ -28,6 +25,10 @@ public class JokerServer {
 
 
     RoomManager roomManager = new RoomManager();
+
+    // ---- added for v3: all new protocol code lives in RoomProtocol
+    public static final String SERVER_ID = java.util.UUID.randomUUID().toString();
+    private final RoomProtocol protocol = new RoomProtocol(this, roomManager);
 
     public JokerServer(int tcpPort) throws IOException {
         ServerSocket srvSocket = new ServerSocket(tcpPort);
@@ -52,7 +53,7 @@ public class JokerServer {
                     synchronized (lockObject){
                         clients.remove(socket);
                     }
-                    roomManager.removePlayer(player);
+                    protocol.onDisconnected(player);   // v3: forfeit / host transfer / broadcast
                 }
             });
             t.start();
@@ -61,50 +62,13 @@ public class JokerServer {
 
     public void serve(Player player, Socket socket) throws IOException{
         DataInputStream in = new DataInputStream(socket.getInputStream());
-        GameRoom room = roomManager.assign(player);
+        roomManager.assign(player);
+        player.playerId = java.util.UUID.randomUUID().toString();   // v3
 
-        boolean success = false;
-        synchronized (room.lock) {
-            success = sendPuzzle(player, room.engine.isGameOver);
-        }
-
-        if(!success)
+        if (!protocol.sendInitialPuzzle(player))
             throw new IOException("Unable to send the puzzle to the new player!");
 
-        byte[] buffer = new byte[1024];
-
-        while(true){
-
-            int dataType = in.readInt();
-
-            int len = in.readInt();
-            in.read(buffer, 0, len);
-
-            switch(dataType){
-                case NAME:
-                    handleName(player, new String(buffer, 0, len));
-                    break;
-                case COMMAND:
-                    handleCommand(player, new String(buffer,0,len));
-                    break;
-                case START_GAME:
-                    handleStartGame(player);
-                    break;
-                case UNDO:
-                    handleUndo(player);
-                    break;
-                case UPLOAD_PUZZLE:
-                    handleUpload(player, in);
-                    break;
-                case GET_TOP10:
-                    handleTop10(player);
-                    break;
-                default:
-                    System.out.println("Unknown data type");
-            }
-
-            System.out.println("Receive " + dataType + ": " + new String(buffer, 0, len));
-        }
+        protocol.handle(player, in);      // v3: reads v2 frames until the socket dies
     }
 
     public boolean sendPuzzle(Player player, boolean isGameOver){
@@ -151,21 +115,11 @@ public class JokerServer {
                 System.out.println("It is not your turn!");
                 return;
             }
-            int[] boardBeforeMove = Arrays.copyOf(player.room.engine.board, player.room.engine.board.length);
             boolean changed = player.room.engine.processCommand(player,command);
             if(!changed){
                 System.out.println("Not changed!");
-                if(player.room.engine.checkGameOver()){
-                    System.out.println("Game Over!");
-                    settleGame(player.room);
-                }
                 return;
             }
-            if(player.room.engine.checkGameOver()){
-                System.out.println("Game Over!");
-                settleGame(player.room);
-            }
-            player.room.lastBoard = boardBeforeMove;
 //            player.room.engine.processCommand(player, command);//process the command and update the data in board
             currentPlayer.room.moveLeft--;
             if(currentPlayer.room.moveLeft==0){
@@ -226,87 +180,5 @@ public class JokerServer {
             player.room.started=true;
             System.out.println("Room " + player.room.roomId + " started by " + player.name);
         }
-    }
-    public void handleUndo(Player player) {
-        if (player.room == null || !player.room.started)
-            return;
-        synchronized (player.room.lock) {
-            Player currentPlayer = player.room.players.get(player.room.currentPlayer);
-            if (!(player == currentPlayer)) {
-                System.out.println("It is not your turn!");
-                return;
-            }
-            if (player.hasUndone) {
-                System.out.println("You have already used your undo!");
-                return;
-            }
-            if (player.room.lastBoard == null) {
-                System.out.println("No action to undo!");
-                return;
-            }
-            player.room.engine.board = Arrays.copyOf(player.room.lastBoard, player.room.lastBoard.length);
-            player.hasUndone = true;
-            player.room.moveLeft++;
-            player.room.lastBoard = null;
-            System.out.println(player.name + " has used undo this turn!");
-
-            for (Player p : player.room.players) {
-                if (sendPuzzle(p, player.room.engine.isGameOver)) {
-                    sendPlayerInfo(player, p);
-                }
-            }
-
-        }
-
-    }
-    public void handleUpload(Player player, DataInputStream in){
-        if(player.room==null || !player.room.started){
-            return;
-        }
-        synchronized (player.room.lock){
-            try{
-                int [] newBoard = new int[16];
-                for(int i=0; i<16; i++){
-                    newBoard[i] = in.readInt();
-                }
-                Player currentPlayer = player.room.players.get(player.room.currentPlayer);
-                if(currentPlayer!=player){
-                    System.out.println("It is not your turn!");
-                    return;
-                }
-                player.room.engine.board = newBoard;
-                player.room.moveLeft--;
-                if(player.room.moveLeft == 0){
-                    player.room.currentPlayer = (player.room.currentPlayer+1)%player.room.players.size();
-                    player.room.moveLeft=4;
-                    System.out.println(player.room.players.get(player.room.currentPlayer).name+" it's your turn!");
-                    player.room.lastBoard = null;
-                }
-                for(Player p: player.room.players){
-                    if(sendPuzzle(p, player.room.engine.isGameOver)) {
-                        sendPlayerInfo(player, p);
-                    }
-                }
-            } catch (IOException e) {
-                System.out.println("Fail to upload the board!");
-            }
-        }
-    }
-    public void settleGame(GameRoom room){
-        if(room.isRecordSaved){
-            return;
-        }
-        room.isRecordSaved = true;
-        Player winner = room.players.get(0);
-        for(Player p: room.players){
-            if(p.score>winner.score){
-                winner = p;
-            }
-        }
-        System.out.println("Winner: "+winner.name + " Score: "+winner.score + " Level: "+ room.engine.level);
-    }
-    public void handleTop10(Player player){
-        //别忘了替换，这里需要data.base.getScores()，和排行榜！！！！！！！！！！！！！
-
     }
 }

@@ -99,36 +99,4 @@ public class ServerEngine {
         board[i] = random.nextInt(level) / 4 + 1;
         return true;
     }
-
-    public boolean checkGameOver(){
-        for(int b: board){
-            if(b==14){
-                isGameOver = true;
-                return true;
-            }
-        }
-        if (!isFull()){
-            isGameOver = false;
-            return false;
-        } else{
-            for(int i=0; i<SIZE; i++){
-                for(int j=0; j<SIZE-1; j++){
-                    if(board[i*SIZE+j]==board[i+SIZE+j+1]){
-                        isGameOver = false;
-                        return false;
-                    }
-                }
-            }
-            for(int i=0; i<SIZE-1; i++){
-                for(int j=0; j<SIZE; j++){
-                    if(board[i*SIZE+j]==board[(i+1)*SIZE+j]){
-                        isGameOver = false;
-                        return false;
-                    }
-                }
-            }
-        }
-        isGameOver = true;
-        return true;
-    }
 }

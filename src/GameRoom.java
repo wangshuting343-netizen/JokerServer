@@ -1,5 +1,6 @@
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class GameRoom {
     public int roomId;
@@ -10,8 +11,14 @@ public class GameRoom {
     public final Object lock = new Object();
     public int currentPlayer = 0;
     public int moveLeft = 4;
-    public int[] lastBoard = null;
-    public boolean isRecordSaved = false;
+
+    //added for v3 (pure additions, nothing removed)
+    public String gameId = UUID.randomUUID().toString();
+    public long revision = 0;
+    public long turnNumber = 0;
+    public int[] undoBoard;
+    public int undoLevel;
+    public Player undoOwner;
 
     public GameRoom(int roomId){
         this.roomId = roomId;
