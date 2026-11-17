@@ -1,0 +1,26 @@
+验证日期：2026-11-17 Asia/Shanghai
+来源 A：b7d772848f6ea89a3db04987a9adba749bd153fe
+
+实际通过：
+- run.ps1 build（服务端、共享代码、JavaFX 客户端）
+- RepositoryTest（真实 SQLite）
+- MigrationTest（旧表保留、重复导入、两个房间并发保存）
+- SettlementTest（真实路径不可用、失败不发布、恢复重试成功）
+- EngineTest（先观察横向判断失败，修复后通过；Joker 不生新牌）
+- CacheTest（乱序、重复存活时间、新 serverId）
+- tests/run_network.py（真实 TCP、分段 UTF-8、开始/上传/Joker 结束、PENDING/SAVED、结果重查、历史榜；独立测试 DB）
+- MulticastTest（真实本机 IPv4 网卡 ethernet_32774，立即与定时数据报、中文、正常关闭）
+- OriginalBugTest（原始 ZIP Database 类，真实 SQLite 引号错误）
+- GuiSmokeTest（实际打开游戏和排行榜窗口，FXML/卡牌图片加载，自动关闭）
+
+测试过程中已发现并排除：运行环境本机套接字限制、默认选到仅 IPv6 网卡、旧客户端测试类仍引用数据库、测试脚本端口不一致。最终网络测试使用同一运行环境和独立测试端口，不修改正式数据库。
+
+未验证：真实多电脑 LAN、完整 GUI 交互逐屏验收、三人报告视频。完整产品仍有 README 列出的 A/B 功能缺项，不能据此记录全部 Version 3 或全部附加分完成。
+2026-11-17 C finishing checks:
+- PASS ResultCacheTest: participant-only access, 30-minute retention, persistence updates, expiry (controlled clock; no thirty-minute real-time wait).
+- PASS ViewsTest: PENDING/FAILED/SAVED update one window, history refresh reuses one window, round/history separation, disconnect alert.
+- PASS ScoreboardUiTest: real local multicast reaches JavaFX, missing packets trigger a warning after six seconds, old scores remain visible, receiver closes normally.
+- PASS TCP integration: authorized result lookup and unrelated-session rejection, in addition to the existing settlement/history checks.
+- PASS byte-for-byte preservation of supplied GameEngine.java and Database.java against the group ZIP.
+- PASS complete build and six non-UI regression test classes.
+- Cross-computer testing, report preparation and video materials remain outside this finishing pass at the user's request.

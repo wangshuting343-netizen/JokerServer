@@ -28,3 +28,13 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+# Exclude generated files and local databases from the integration branch.
+**/build/
+**/client-build/
+**/original-test/
+*.class
+*.db
+*.db-*
+*.log
+*.tmp
+__pycache__/
